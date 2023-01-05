@@ -90,7 +90,7 @@ class mysql_db{
 		try{
 			$ret = $this->conn->query($sql);
 		}catch(\PDOException $e){
-			$this->db->error($this->conn,$sql);
+			$this->error($this->conn,$sql);
 			_exit(config('xaoi/state_code.mysql.error'));
 			return false;
 		}
@@ -110,14 +110,14 @@ class mysql_db{
 		try{
 			$stmt = $this->conn->prepare($sql);
 		}catch(\PDOException $e){
-			$this->db->error($this->conn,$sql,$bind);
+			$this->error($this->conn,$sql,$bind);
 			_exit(config('xaoi/state_code.mysql.error'));
 			return false;
 		}
 		try{
 			$stmt->execute($bind);
 		}catch(\PDOException $e){
-			$this->db->error($stmt,$sql,$bind);
+			$this->error($stmt,$sql,$bind);
 			_exit(config('xaoi/state_code.mysql.error'));
 			return false;
 		}
@@ -137,7 +137,7 @@ class mysql_db{
 		try{
 			$stmt = $this->conn->prepare($sql);
 		}catch(\PDOException $e){
-			$this->db->error($this->conn,$sql,$bind);
+			$this->error($this->conn,$sql);
 			return false;
 		}
 		return $stmt;

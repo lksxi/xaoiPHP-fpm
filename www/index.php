@@ -5,18 +5,23 @@ namespace xaoi{
 // 开启调试模式 建议开发阶段开启 部署阶段注释或者设为false
 define('APP_DEBUG',true);
 
+// 定义项目目录
+define('_HOME_',__DIR__.'/..');
+
 // 定义应用目录
-define('APP_PATH','../app');
+define('APP_PATH',_HOME_.'/app');
+define('_APP_',url_path(APP_PATH));
+
+// 定义应用目录
+define('__ROOT__','');
+define('_ROOT_',_HOME_.'/www');
+
+// 定义上传路径
+define('__UPLOAD__','https://zlks.safe-union.com/api/index/upload');
+define('_UPLOAD_',_ROOT_.'/upload');
 
 // 检测PHP环境
 if(version_compare(PHP_VERSION,'5.4.0','<')) die('require PHP > 5.4.0 !');
-
-define('_APP_',url_path(__DIR__.'/'.APP_PATH));
-define('_ROOT_',__DIR__);
-define('__ROOT__','');
-define('_HOME_',__DIR__);
-define('__UPLOAD__','/upload');
-define('_UPLOAD_',_ROOT_.__UPLOAD__);
 
 \xaoi\container::init();
 bind(config('xaoi/bind'));
@@ -43,10 +48,10 @@ class app{
 
 		if(APP_DEBUG){
 			ini_set('error_log', _APP_ . '/error_log.txt');
-			ini_set('display_errors','On');
-			set_error_handler(function($errno, $errstr, $errfile, $errline){
-				_echo($errstr, $errfile.':'.$errline);
-			});
+			// ini_set('display_errors','On');
+			// set_error_handler(function($errno, $errstr, $errfile, $errline){
+			// 	_echo($errstr, $errfile.':'.$errline);
+			// });
 		}else{
 			set_error_handler(function($errno, $errstr, $errfile, $errline){
 				//echo err(0,'错误信息：'.$errstr."\n\t文件：".$errfile."\n\t行数：".$errline."\n\n");
@@ -70,11 +75,7 @@ class app{
 			$route = $this->route(key($_GET));
 		}else{
 			$len = strlen($_SERVER['PATH_INFO']);
-			if(strripos($_SERVER['PATH_INFO'],'.html') === $len - 6){
-				$route = $this->route(substr($_SERVER['PATH_INFO'],-6));
-			}else{
-				$route = $this->route($_SERVER['PATH_INFO']);
-			}
+			$route = $this->route($_SERVER['PATH_INFO']);
 		}
 
 		define('ROUTE_CLASS',$route['class']);
@@ -114,14 +115,21 @@ class app{
 					}elseif(is_string($r)){
 						exit($r);
 					}elseif(is_int($r)){
-						exit('['.$r.']');
+						exit('{"code":'.$r.',"data":null}');
 					}elseif(is_array($r)){
+						$rarr = [];
+						if(isset($r[0]))$rarr['code'] = $r[0];
+						if(isset($r[1]))$rarr['data'] = $r[1];
+						if(isset($r[2]))$rarr['message'] = $r[2];
+						exit(json($rarr));
+					}elseif(is_object($r)){
 						exit(json($r));
 					}
 				}else{
-					_json([-1004,'Parameter not defined']);
+					_json([config('xaoi/state_code.app.input'),'Parameter not defined']);
 				}
 			}else{
+				header('HTTP/1.1 404 Not Found');
 				exit('<html>
 <head><title>404 Not Found</title></head>
 <body>
@@ -131,7 +139,7 @@ class app{
 </html>');
 			}
 		}catch(\Exception $e){
-			_json($e->getMessage());
+			echo $e->getMessage();
 		}
 	}
 
@@ -238,10 +246,10 @@ class app{
 	}
 
 	private function load($k){
-		$f = _APP_.'/'.config('xaoi/route.runtime').'/'.$k.'.cls.php';
+		$f = _HOME_.'/'.config('xaoi/route.runtime').'/'.$k.'.cls.php';
 		if(is_file($f)){
 			if(APP_DEBUG){
-				$up = include(_APP_.'/'.config('xaoi/route.runtime').'/'.$k.'.up.php');
+				$up = include(_HOME_.'/'.config('xaoi/route.runtime').'/'.$k.'.up.php');
 				if(!$this->is_update($up)){
 					$this->up = $up;
 					$this->cls = include($f);
@@ -270,7 +278,7 @@ class app{
 		}
 		//config
 		foreach($info['config'] as $v){
-			if(!is_file(_APP_.'/config/'.$v[0].'.php') || filemtime(_APP_.'/config/'.$v[0].'.php') > $v[1]){
+			if(!is_file(_HOME_.'/config/'.$v[0].'.php') || filemtime(_HOME_.'/config/'.$v[0].'.php') > $v[1]){
 				return true;
 			}
 		}
@@ -300,19 +308,19 @@ class app{
 
 		$str .= "\n".'namespace {return [\'config\'=>'.var_export($conf,true).',\'view\'=>['.implode(',',$fns).']];}';
 		
-		$f = _APP_.'/'.config('xaoi/route.runtime').'/'.$path.'.cls.php';
+		$f = _HOME_.'/'.config('xaoi/route.runtime').'/'.$path.'.cls.php';
 		F($f,$str);
-		F($f,php_strip_whitespace($f));
+		if(!APP_DEBUG)F($f,php_strip_whitespace($f));
 
 		foreach($this->new_cls as $v){
 			$this->up['class'][] = [$v,filemtime(_APP_.'/'.$v.'.php')];
 		}
 		foreach($conf as $k2 => $v){
-			$this->up['config'][] = [$k2,filemtime(_APP_.'/config/'.$k2.'.php')];
+			$this->up['config'][] = [$k2,filemtime(_HOME_.'/config/'.$k2.'.php')];
 		}
-		$f = _APP_.'/'.config('xaoi/route.runtime').'/'.$path.'.up.php';
+		$f = _HOME_.'/'.config('xaoi/route.runtime').'/'.$path.'.up.php';
 		F($f,'<?php return '.var_export($this->up,true).';');
-		F($f,php_strip_whitespace($f));
+		if(!APP_DEBUG)F($f,php_strip_whitespace($f));
 	}
 
 	private function get_fn($c){
@@ -533,7 +541,7 @@ function config($name = ''){
 
 	if(!isset($_conf[$file])){
 		$_conf[$file] = array();
-		$path = _APP_.'/config/'.$file.'.php';
+		$path = _HOME_.'/config/'.$file.'.php';
 		if(is_file($path)){
 			$_conf[$file] = include($path);
 			$_file[$file] = $_conf[$file];
@@ -611,7 +619,7 @@ function db(){
 			$ref = new \ReflectionFunction($tab);
 			$par = $ref->getParameters();
 			array_shift($par);
-			$args = [$tabs[$dbname]];
+			$args = [$dbs[$dbname]];
 			foreach($par as $n){
 				$tabname = $n->getName();
 				if(empty($tabs[$dbname][$tabname])){
@@ -620,11 +628,7 @@ function db(){
 				$args[] = $tabs[$dbname][$tabname];
 			}
 			$r = call_user_func_array($tab,$args);
-			if(is_null($r)){
-				$dbs[$dbname]->commit();
-			}else{
-				$dbs[$dbname]->rollback();
-			}
+			$dbs[$dbname]->commit();
 			return $r;
 		}catch(\Exception $e){
 			$dbs[$dbname]->rollback();
@@ -652,7 +656,8 @@ function _echo(){
 	$args = func_get_args();
 	foreach($args as $v){
 		//_fsockopen('http://echo.com:1350/echo',is_null($v)?'NULL':print_r($v,true),true);
-		_fsockopen('http://127.0.0.1:8000',['str'=>is_null($v)?'NULL':print_r($v,true)],true);
+		// _fsockopen('http://127.0.0.1:8000',['str'=>is_null($v)?'NULL':print_r($v,true)],true);
+		print_r($v);
 	}
 }
 
@@ -679,7 +684,17 @@ function _exit(){
 		break;
 		case 1:
 			$arg = func_get_arg(0);
-			throw new \Exception(is_string($arg)?$arg:json($arg));
+			if(is_string($arg)){
+				throw new \Exception($arg);
+			}elseif(is_array($arg)){
+				$rarr = [];
+				if(isset($arg[0]))$rarr['code'] = $arg[0];
+				if(isset($arg[1]))$rarr['data'] = $arg[1];
+				if(isset($arg[2]))$rarr['message'] = $arg[2];
+				throw new \Exception(json($rarr));
+			}else{
+				throw new \Exception(json($arg));
+			}
 		break;
 		default:
 			throw new \Exception(json(func_get_args()));
@@ -761,7 +776,7 @@ function _curl($url, $data = array(),$cookie = ''){
 	curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
 	curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, FALSE);
 	curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, FALSE);
-	curl_setopt($ch, CURLOPT_TIMEOUT, 30);
+	curl_setopt($ch, CURLOPT_TIMEOUT, 10);
 	curl_setopt($ch, CURLOPT_HEADER, false);
 	curl_setopt($ch, CURLOPT_ENCODING, 'gzip');
 	$r = curl_exec($ch);
@@ -880,10 +895,10 @@ function posts($arr){
 }
 
 // 获取并过滤变量
-function I($_p,$data = null){
+function input($_p,$data = null){
 	if(is_array($_p)){
 		foreach($_p as &$v){
-			$v = I($v,$data);
+			$v = input($v,$data);
 		}
 	}elseif(!is_string($_p)){
 		return $_p;
@@ -901,7 +916,14 @@ function I($_p,$data = null){
 				$p = &$_GET;
 			break;
 			case 'post':
-				$p = &$_POST;
+				if(!empty($_SERVER['CONTENT_TYPE']) && $_SERVER['CONTENT_TYPE'] === 'application/json'){
+					$p = '';
+					$p = file_get_contents('php://input');
+					if(!empty($p))$p = json_decode($p,true);
+					if(empty($p))$p = [];
+				}else{
+					$p = &$_POST;
+				}
 			break;
 			case 'file':
 				$p = &$_FILES;
@@ -935,14 +957,18 @@ function I($_p,$data = null){
 		$_p = $p;
 		if(is_null($_p) || $_p === ''){
 			if(is_null($def)){
-				_json([-1004,'input error:'.(APP_DEBUG?$tmp[0]:'')]);
+				$msg = config('xaoi/state_code.input.empty');
+				$msg[1] = APP_DEBUG?$tmp[0]:'';
+				_json($msg);
 			}else{
 				$_p = $def;
 			}
 		}elseif(!is_null($zz)){
 			if(1 !== preg_match($zz,(string)$_p)){
 				if(is_null($def)){
-					_json([-1004,'input error:'.(APP_DEBUG?$tmp[0]:'')]);
+					$msg = config('xaoi/state_code.input.empty');
+					$msg[1] = APP_DEBUG?$tmp[0]:'';
+					_json($msg);
 				}else{
 					$_p = $def;
 				}
@@ -995,7 +1021,7 @@ function I($_p,$data = null){
 				}else{
 					$d = json_decode($_p,true);
 					if(is_array($d)){
-						$_p = form(I('file'),'file_'.implode('_',$a),$d);
+						$_p = form(input('file'),'file_'.implode('_',$a),$d);
 					}else{
 						$_p = null;
 					}
@@ -1148,71 +1174,10 @@ function cookie(){
 	}
 }
 
-// 设置session
-function session(){
-	switch(func_num_args()){
-		case 0:
-			if(empty($_SESSION)){
-				$sess_name = session_name();
-				session_start();
-				setcookie($sess_name, session_id(), null, '/', null, null, true);
-			}
-			return $_SESSION;
-		break;
-		case 1:
-			$k = func_get_arg(0);
-			if(is_array($k)){
-				if(empty($_SESSION)){
-					$sess_name = session_name();
-					session_start();
-					setcookie($sess_name, session_id(), null, '/', null, null, true);
-				}
-				foreach($k as $key => &$value){
-					$_SESSION[$key] = $value;	
-				}
-			}elseif(is_null($k)){
-				session_start();
-				session_destroy();
-			}elseif(!empty($k)){
-				if(empty($_SESSION)){
-					$sess_name = session_name();
-					session_start();
-					setcookie($sess_name, session_id(), null, '/', null, null, true);
-				}
-				$k = explode('.',$k);
-				$p = &$_SESSION;
-				for($i=0,$l=count($k);$i!=$l;++$i){
-					if(!is_array($p))return;
-					$p = &$p[$k[$i]];
-				}
-				return $p;
-			}
-		break;
-		case 2:
-			if(empty($_SESSION)){
-				$sess_name = session_name();
-				session_start();
-				setcookie($sess_name, session_id(), null, '/', null, null, true);
-			}
-			$k = func_get_arg(0);
-			$v = func_get_arg(1);
-			if(!empty($k)){
-				$k = explode('.',$k);
-				$p = &$_SESSION;
-				for($i=0,$l=count($k);$i!=$l;++$i){
-					if(!is_array($p))$p=array();
-					$p = &$p[$k[$i]];
-				}
-				$p = $v;
-			}
-		break;
-	}
-}
-
 //分页工具
 function page($db,$where = '',$field = '',$order = '',$group = ''){
-	$page = I('post.page/I');
-	$limit = I('post.limit/I');
+	$page = input('post.page/I');
+	$limit = input('post.limit/I');
 	try{
 		$count = $db->get($where,'count(*) as count',1)['count'];
 		if(empty($count)||!isset($count))$count = 0;
@@ -1225,19 +1190,13 @@ function page($db,$where = '',$field = '',$order = '',$group = ''){
 	}catch(\Exception $e){
 		
 		return [
-			'code'=> 0,
-			'msg'=> -500,
-			'limit'=> 0,
-			'count'=> 0,
+			'total'=> 0,
 			'data'=>[]
 		];
 	}
 
 	return [
-		'code'=> 0,
-		'msg'=> '',
-		'limit'=> $limit,
-		'count'=> $count,
+		'total'=> $count,
 		'data'=>$data
 	];
 }
@@ -1272,8 +1231,8 @@ function page_ids(&$d){
 }
 
 function order($oa){
-	$order = I('post.order/s=');
-	$desc = I('post.desc/I=');
+	$order = input('post.order/s=');
+	$desc = input('post.desc/I=');
 
 	$_order = [];
 	if(in_array($order,$oa)){
@@ -1281,6 +1240,43 @@ function order($oa){
 	}
 
 	return $_order;
+}
+
+// 设置session
+function session(){
+	$sess = app('session');
+	if(empty($sess))_exit('no open session');
+	return call_user_func_array([$sess,'session'],func_get_args());
+}
+
+function redis(){
+	static $dbs = [];
+	switch(func_num_args()){
+		case 0:
+			return;
+		break;
+		case 1:
+			$dbname = 'default';
+			$tab = func_get_arg(0);
+		break;
+		case 2:
+			$dbname = func_get_arg(0);
+			$tab = func_get_arg(1);
+		break;
+	}
+	if($tab instanceof \Closure){
+		$obj = app('\xaoi\redis');
+		try{
+			$r = call_user_func($tab,$obj);
+			return $r;
+		}catch(\Exception $e){
+			if(APP_DEBUG)_echo($e->getMessage());
+			return config('xaoi/state_code.redis.error');
+		}
+	}else{
+		if(empty($dbs[$dbname][$tab]))$dbs[$dbname][$tab] = new \xaoi\redis($dbname,$tab);
+		return $dbs[$dbname][$tab];
+	}
 }
 
 }
